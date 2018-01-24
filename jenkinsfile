@@ -1,0 +1,57 @@
+#!/usr/bin/env groovy
+import groovy.json.JsonOutput
+
+node {
+  STATE = "pending"
+  PREV_STATE = "pending"
+  REPO_NAME = ""
+  PACKAGE_NAME = "angular-ckeditor"
+  NPM_UPLOAD_PATH = "https://aradstifactory.gannettdigital.com/artifactory/cs-node"
+  TEAM = "content-engineering"
+  ENVIRONMENT = "production"
+
+  withCredentials([
+    string(credentialsId: "NPM_AUTH_TOKEN", variable: "NPM_AUTH_TOKEN")
+  ]) {
+
+    stage('Git Clone') {
+      deleteDir()
+      checkout scm
+    }
+
+
+   stage('Upload Package') {
+      currentBuild.description = "${ENVIRONMENT} : ${APP_NAME}"
+      waitUntil {
+        OUTPUT = uploadPackage(OBJECT)
+        DEPLOY_ID = OUTPUT.id
+        if (OUTPUT.error != null && OUTPUT.error.contains('There was a problem proxying the request')) {
+          return false
+        }
+        return true
+      }
+      if ( DEPLOY_ID == null ) {
+        println OUTPUT
+      }
+      sleep(30)
+    }
+  }
+}
+
+
+def uploadPackage(upload_package) {
+  command = sh (
+    script: "curl -i -H \"x-api-key: ${NPM_AUTH_TOKEN}\" -T ${PACKAGE_NAME} ${NPM_UPLOAD_PATH}/${PACKAGE_NAME} -v",
+    returnStdout: true
+  ).trim()
+  if (DEBUG == "true") {
+    println command
+  }
+  try {
+    return readJSON(text: command)
+  }
+  catch (err) {
+    println command
+    responseError("complete", id)
+  }
+}
